@@ -37,28 +37,45 @@ void I2C_init() {
     gpio_pull_up(SCL_PIN);
 }
 
-void MPU_init() {
+void MPU_init(int16_t data[6]) {
     write_reg(MPU_PWR, 0x00);
-    sleep_ms(100);
+    sleep_ms(1000);
     
     write_reg(ACCEL_CONFIG, 0x00);  // Акселерометр: ±2g
     write_reg(GYRO_CONFIG, 0x00);   // Гироскоп: ±250 град/с
-    sleep_ms(100);
+    sleep_ms(1000);
+    
+    int samples = 100;
+    printf("Идёт калибровка...");
+    for (int i = 0; i < samples; i++) {
+        data[0] += read_reg(ACCEL_XOUT_H);
+        data[1] += read_reg(ACCEL_XOUT_H + 2);
+        data[2] += read_reg(ACCEL_XOUT_H + 4);
+        data[3] += read_reg(GYRO_XOUT_H);
+        data[4] += read_reg(GYRO_XOUT_H + 2);
+        data[5] += read_reg(GYRO_XOUT_H + 4);
+        sleep_ms(100);
+    }
+    for (int i = 0; i < 6; i++) {
+        data[i] /= samples;
+    }
 }
 
 int main() {
     stdio_init_all();
     I2C_init();
-    MPU_init();
-    
+
+    uint16_t calibration[6] = {0, 0, 0, 0, 0, 0};
+    MPU_init(calibration);
+
     while (1) {
-        int16_t ax = read_reg(ACCEL_XOUT_H + 0);
-        int16_t ay = read_reg(ACCEL_XOUT_H + 2);
-        int16_t az = read_reg(ACCEL_XOUT_H + 4);
+        int16_t ax = read_reg(ACCEL_XOUT_H + 0) - calibration[0];
+        int16_t ay = read_reg(ACCEL_XOUT_H + 2) - calibration[1];
+        int16_t az = read_reg(ACCEL_XOUT_H + 4) - calibration[2];
         
-        int16_t gx = read_reg(GYRO_XOUT_H + 0);
-        int16_t gy = read_reg(GYRO_XOUT_H + 2);
-        int16_t gz = read_reg(GYRO_XOUT_H + 4);
+        int16_t gx = read_reg(GYRO_XOUT_H) - calibration[3];
+        int16_t gy = read_reg(GYRO_XOUT_H + 2) - calibration[4];
+        int16_t gz = read_reg(GYRO_XOUT_H + 4) - calibration[5];
         
         double ax_g = ax / 16384.0;
         double ay_g = ay / 16384.0;
